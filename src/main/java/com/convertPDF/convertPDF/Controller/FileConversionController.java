@@ -83,6 +83,7 @@ public class FileConversionController {
         }
     }
 
+
     // 📥 Endpoint para baixar arquivos da pasta ConvertedFiles
     @GetMapping("/download/{fileName}")
     public ResponseEntity<byte[]> downloadFile(@PathVariable String fileName) {
