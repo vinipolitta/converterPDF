@@ -14,22 +14,25 @@ import com.itextpdf.layout.element.Paragraph;
 
 import java.io.*;
 import java.nio.file.*;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
+@CrossOrigin(origins = "http://localhost:4200")
 public class FileConversionController {
 
     private static final String CONVERTED_FILES_DIR = "ConvertedFiles";
 
     // 📝 Endpoint para converter e salvar o arquivo Word como PDF
     @PostMapping(value = "/word-to-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<String> convertWordToPdf(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<Map<String, String>> convertWordToPdf(@RequestParam("file") MultipartFile file) {
+        Map<String, String> response = new HashMap<>();
         try {
             // Verifica se o arquivo foi enviado
             if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body("No file provided.");
+                response.put("message", "No file provided.");
+                return ResponseEntity.badRequest().body(response);
             }
 
             // Criação do diretório ConvertedFiles, se não existir
@@ -56,10 +59,12 @@ public class FileConversionController {
             pdfDocument.close();
             document.close();
 
-            return ResponseEntity.ok("File successfully converted and saved at: " + pdfPath.toAbsolutePath());
+            response.put("message", "File successfully converted and saved at: " + pdfPath.toAbsolutePath());
+            return ResponseEntity.ok(response);
         } catch (IOException e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body("Error during file conversion.");
+            response.put("message", "Error during file conversion.");
+            return ResponseEntity.status(500).body(response);
         }
     }
 
@@ -82,7 +87,6 @@ public class FileConversionController {
             return ResponseEntity.status(500).body(null);
         }
     }
-
 
     // 📥 Endpoint para baixar arquivos da pasta ConvertedFiles
     @GetMapping("/download/{fileName}")
