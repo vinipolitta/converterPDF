@@ -11,6 +11,8 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.io.*;
 import java.nio.file.*;
@@ -24,9 +26,9 @@ public class FileConversionController {
 
     private static final String CONVERTED_FILES_DIR = "ConvertedFiles";
 
-    // 📝 Endpoint para converter e salvar o arquivo Word como PDF
-    @PostMapping(value = "/word-to-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Map<String, String>> convertWordToPdf(@RequestParam("file") MultipartFile file) {
+    // 📝 Endpoint para converter e salvar o arquivo com base no tipo de conversão
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> convertFile(@RequestParam("file") MultipartFile file, @RequestParam("conversionType") String conversionType) {
         Map<String, String> response = new HashMap<>();
         try {
             // Verifica se o arquivo foi enviado
@@ -41,31 +43,67 @@ public class FileConversionController {
                 Files.createDirectories(directoryPath);
             }
 
-            // Nome do arquivo PDF
-            String fileName = "converted_" + System.currentTimeMillis() + ".pdf";
-            Path pdfPath = directoryPath.resolve(fileName);
+            String filePrefix = conversionType.toLowerCase().contains("pdf") ? "pdf_" : "word_";
+            String fileName = filePrefix + "converted_" + System.currentTimeMillis();
+            Path outputPath;
 
-            // Converte Word para PDF e salva no diretório
-            XWPFDocument document = new XWPFDocument(file.getInputStream());
-            PdfWriter pdfWriter = new PdfWriter(Files.newOutputStream(pdfPath));
-            PdfDocument pdfDocument = new PdfDocument(pdfWriter);
-            Document pdfDoc = new Document(pdfDocument);
+            switch (conversionType.toLowerCase()) {
+                case "wordtopdf":
+                    fileName += ".pdf";
+                    outputPath = directoryPath.resolve(fileName);
+                    convertWordToPdf(file, outputPath);
+                    break;
+                case "pdftoword":
+                    fileName += ".docx";
+                    outputPath = directoryPath.resolve(fileName);
+                    convertPdfToWord(file, outputPath);
+                    break;
+                default:
+                    response.put("message", "Invalid conversion type.");
+                    return ResponseEntity.badRequest().body(response);
+            }
 
-            document.getParagraphs().forEach(paragraph -> {
-                pdfDoc.add(new Paragraph(paragraph.getText()));
-            });
-
-            pdfDoc.close();
-            pdfDocument.close();
-            document.close();
-
-            response.put("message", "File successfully converted and saved at: " + pdfPath.toAbsolutePath());
+            response.put("message", "File successfully converted and saved at: " + outputPath.toAbsolutePath());
             return ResponseEntity.ok(response);
         } catch (IOException e) {
             e.printStackTrace();
             response.put("message", "Error during file conversion.");
             return ResponseEntity.status(500).body(response);
         }
+    }
+
+    private void convertWordToPdf(MultipartFile file, Path outputPath) throws IOException {
+        XWPFDocument document = new XWPFDocument(file.getInputStream());
+        PdfWriter pdfWriter = new PdfWriter(Files.newOutputStream(outputPath));
+        PdfDocument pdfDocument = new PdfDocument(pdfWriter);
+        Document pdfDoc = new Document(pdfDocument);
+
+        document.getParagraphs().forEach(paragraph -> {
+            pdfDoc.add(new Paragraph(paragraph.getText()));
+        });
+
+        pdfDoc.close();
+        pdfDocument.close();
+        document.close();
+    }
+
+    private void convertPdfToWord(MultipartFile file, Path outputPath) throws IOException {
+        PDDocument pdfDocument = PDDocument.load(file.getInputStream());
+        PDFTextStripper pdfStripper = new PDFTextStripper();
+        String text = pdfStripper.getText(pdfDocument);
+
+        XWPFDocument wordDocument = new XWPFDocument();
+        String[] paragraphs = text.split("\n");
+        for (String paragraph : paragraphs) {
+            wordDocument.createParagraph().createRun().setText(paragraph);
+        }
+
+        try (FileOutputStream out = new FileOutputStream(outputPath.toFile())) {
+            wordDocument.write(out);
+        }
+
+        wordDocument.close();
+        pdfDocument.close();
     }
 
     // 📂 Endpoint para listar arquivos na pasta ConvertedFiles
